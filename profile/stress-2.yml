@@ -1,0 +1,84 @@
+# The name of the keyspace
+keyspace: ks
+
+# Create the keyspace
+keyspace_definition: |
+   CREATE KEYSPACE ks     WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'datacenter1' : 3 }     AND STORAGE = { 'type' : 'S3', 'bucket' : 'ricardo-test-ks/ks','endpoint' : 's3.amazonaws.com'};
+
+# The name of the table
+table: user_story_playtime
+
+# The CQL command to create the table
+table_definition: |
+  CREATE TABLE audio_playtime.user_story_playtime (
+    uid text,
+    show_id text,
+    story_id text,
+    duration float,
+    playtime int,
+    profile_id bigint,
+    seq_no int,
+    updated_at timestamp,
+    PRIMARY KEY (uid, show_id, story_id)
+  ) WITH CLUSTERING ORDER BY (show_id ASC, story_id ASC)
+        AND compaction = {'class': 'LeveledCompactionStrategy'}
+
+# Define the columns for the table
+columnspec:
+  - name: uid
+    size: FIXED(36)
+    population: uniform(70M..100M)
+  - name: show_id
+    size: FIXED(36)
+    population: uniform(1..100k)
+  - name: story_id
+    size: FIXED(36)
+    population: seq(1..1500)
+  - name: duration
+    size: FIXED(8)
+    population: gaussian(1..1000)
+  - name: playtime
+    size: FIXED(8)
+    population: gaussian(1..1000)
+  - name: profile_id
+    size: FIXED(8)
+    population: gaussian(1..10000)
+  - name: seq_no
+    size: FIXED(4)
+    population: uniform(1..1000)
+  - name: updated_at
+    size: FIXED(8)
+    population: gaussian(1..10000)
+
+# Define the insertion profile
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+  select: fixed(1)/1
+
+# Define the CQL queries for the stress test
+queries:
+  simple_select:
+    cql: SELECT * FROM user_story_playtime WHERE uid = ?;
+    fields: samerow
+  select_by_show:
+    cql: SELECT * FROM user_story_playtime WHERE uid = ? AND show_id = ?;
+    fields: samerow
+  select_by_story:
+    cql: SELECT * FROM user_story_playtime WHERE uid = ? AND show_id = ? AND story_id = ?;
+    fields: samerow
+  select_story_in:
+    cql: SELECT * FROM user_story_playtime WHERE uid = ? AND show_id = ? AND story_id IN ?;
+    fields: samerow
+  select_sum_duration:
+    cql: SELECT show_id, SUM(duration) AS total_duration FROM user_story_playtime WHERE uid = ? GROUP BY show_id;
+    fields: samerow
+  select_max_updated:
+    cql: SELECT show_id, MAX(updated_at) AS last_listen_time FROM user_story_playtime WHERE uid = ? GROUP BY show_id ;
+    fields: samerow
+  select_count_story:
+    cql: SELECT COUNT(story_id) AS listened_episode_count FROM user_story_playtime WHERE uid = ? AND show_id = ?;
+    fields: samerow
+  select_sum_playtime:
+    cql: SELECT show_id, SUM(playtime) AS total_playtime FROM user_story_playtime WHERE uid = ? AND show_id = ? GROUP BY show_id ;
+    fields: samerow
